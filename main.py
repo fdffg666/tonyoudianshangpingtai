@@ -54,7 +54,6 @@ if __name__ == "__main__":
     # 生成全局 trace_id，全链路追踪
     global_trace_id = get_trace_id()
     ctx_logger = logger.with_context(trace_id=global_trace_id)
-    print("✅ 数据库连接地址：", DATABASE_URL)
     print("✅ Redis配置：", REDIS_CONFIG)
     print("✅ 当前事务隔离级别：", CURRENT_ISOLATION_LEVEL)
 
