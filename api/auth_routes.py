@@ -3,7 +3,9 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import Optional
-
+from sqlalchemy import select
+from services.inventory_service import get_db_session
+from models.user import User
 from services.auth_service import (
     register_by_password,
     login_by_password,
@@ -58,7 +60,42 @@ class SmsLoginRequest(BaseModel):
     code: str
     scene: str = "login"
 
+# ---------- 获取当前用户对象及角色检查 ----------
+async def get_current_user_obj(authorization: Optional[str] = Header(None)):
+    """
+    从 Authorization 头提取 Bearer Token，验证后返回数据库 User 对象
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="未提供 Authorization 头")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Authorization 格式错误，需使用 Bearer")
+    user_data = verify_token(token)  # 返回 {"user_id": ..., "phone": ...}
+    if not user_data:
+        raise HTTPException(status_code=401, detail="Token 无效或已过期")
 
+    # 从数据库获取完整用户对象
+    with get_db_session() as session:
+        user = session.execute(
+            select(User).where(User.id == user_data["user_id"])
+        ).scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=401, detail="用户不存在")
+        return user
+
+
+def require_root(user: User = Depends(get_current_user_obj)):
+    """要求当前用户为 root 管理员"""
+    if user.role != 'root':
+        raise HTTPException(status_code=403, detail="需要 root 管理员权限")
+    return user
+
+
+def require_merchant(user: User = Depends(get_current_user_obj)):
+    """要求当前用户为商家或 root（商家可执行操作）"""
+    if user.role not in ('root', 'merchant'):
+        raise HTTPException(status_code=403, detail="需要商家权限")
+    return user
 # ---------- 账号密码登录 ----------
 @router.post("/register/password")
 async def register_password(request: PasswordRegisterRequest):

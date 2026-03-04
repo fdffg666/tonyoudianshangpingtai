@@ -69,6 +69,7 @@ def register_by_password(phone_number: str, password: str, nickname: str = None)
             user = User(
                 phone_number=phone_number,
                 nickname=nickname or phone_number,
+                role='user'
             )
             user.set_password(password)  # 假设 User 模型有 set_password 方法
             session.add(user)
@@ -260,7 +261,7 @@ def verify_code_and_login(phone_number: str, code: str, scene: str = "login", ip
                 select(User).where(User.phone_number == phone_number)
             ).scalar_one_or_none()
             if not user:
-                user = User(phone_number=phone_number, nickname=f"用户{phone_number[-4:]}")
+                user = User(phone_number=phone_number, nickname=f"用户{phone_number[-4:]}",role='user')
                 session.add(user)
                 session.flush()
                 ctx_logger.info(f"新用户自动注册: id={user.id}")

@@ -21,8 +21,8 @@ class User(Base):
     status = Column(Integer, default=1, comment="状态：0-禁用，1-正常")
     last_login_time = Column(DateTime, nullable=True, comment="最后登录时间")
     last_login_ip = Column(String(45), nullable=True, comment="最后登录IP")
-    clast_login_ip = Column(String(45), nullable=True, comment="最后登录IP（IPv6地址最长45）")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    role = Column(String(20), default='user', nullable=False, comment='角色: root/merchant/user')
 
     __table_args__ = (
         Index("idx_phone_status", "phone_number", "status"),
