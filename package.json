@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "aliyun_numberauthsdk_web": "^2.1.15"
+  }
+}

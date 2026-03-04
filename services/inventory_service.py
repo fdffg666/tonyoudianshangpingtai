@@ -478,8 +478,8 @@ def lock_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int = 30
         locked_delta = lock_num
         success = _update_inventory_with_optimistic_lock(
             session, sku_id, old_version,
-            available_delta=-lock_num,
-            locked_delta=+lock_num
+            available_delta=+lock_num,
+            locked_delta=-lock_num
 
         )
         if not success:
@@ -540,9 +540,8 @@ def release_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int =
 
         if not inventory:
             return _fail(f"SKU {sku_id} 不存在")
-        if inventory.available_stock < lock_num:
-            increment_counter("inventory_stock_shortage", tags={"sku_id": sku_id})
-            return _fail(f"可用库存不足，当前可用: {inventory.available_stock}, 需要: {lock_num}")
+        if inventory.locked_stock < lock_num:
+            return _fail(f"可用库存不足，当前可用: {inventory.locked_stock}, 需要: {lock_num}")
 
         # 记录操作前状态（用于日志）
         before_total = inventory.total_stock
@@ -553,8 +552,8 @@ def release_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int =
         # 执行原子更新
         success = _update_inventory_with_optimistic_lock(
             session, sku_id, old_version,
-            available_delta=-lock_num,
-            locked_delta=+lock_num
+            available_delta=+lock_num,
+            locked_delta=-lock_num
         )
         if not success:
             raise BusinessException(f"库存版本冲突，SKU={sku_id}，请重试")
@@ -571,6 +570,7 @@ def release_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int =
             before_locked=before_locked
         )
         session.add(log)
+        ctx_logger.info(f"释放库存成功: SKU={sku_id}, 订单={order_id}, 数量={lock_num}")
 
         # ... 后续 MQ 消息等
         return _ok(f"锁定库存{lock_num}件成功")
@@ -596,64 +596,82 @@ def deduct_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int = 
 
     biz_id = f"{order_id}_DEDUCT_{sku_id}"
 
-    def business_logic(session, ctx_logger, **kwargs):
-        lock_num = kwargs.get("lock_num")
-        inventory = session.execute(
-            select(Inventory).where(Inventory.sku_id == sku_id).with_for_update()
-        ).scalars().first()
+    def deduct_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int = 30) -> Dict:
+        trace_id = get_trace_id()
+        ctx_logger = logger.with_context(trace_id=trace_id, sku_id=sku_id, order_id=order_id)
 
-        if not inventory:
-            return _fail(f"SKU {sku_id} 不存在")
-        if inventory.locked_stock < lock_num:
-            return _fail(f"锁定库存不足，当前锁定: {inventory.locked_stock}, 需要扣减: {lock_num}")
-        if inventory.total_stock < lock_num:
-            return _fail(f"总库存不足，当前总库存: {inventory.total_stock}, 需要扣减: {lock_num}")
+        if not sku_id or not order_id:
+            return _fail("SKU ID和订单ID不能为空")
+        if lock_num <= 0:
+            return _fail("扣减数量必须大于0")
 
-        before_total = inventory.total_stock
-        before_available = inventory.available_stock
-        before_locked = inventory.locked_stock
-        old_version = inventory.version
+        biz_id = f"{order_id}_DEDUCT_{sku_id}"
 
-        inventory.locked_stock -= lock_num
-        inventory.total_stock -= lock_num
+        def business_logic(session, ctx_logger, **kwargs):
+            lock_num = kwargs.get("lock_num")
+            inventory = session.execute(
+                select(Inventory).where(Inventory.sku_id == sku_id).with_for_update()
+            ).scalars().first()
 
-        if not _check_optimistic_lock(session, sku_id, old_version):
-            raise BusinessException(f"库存版本冲突，SKU={sku_id}，请重试")
+            if not inventory:
+                return _fail(f"SKU {sku_id} 不存在")
+            if inventory.locked_stock < lock_num:
+                return _fail(f"锁定库存不足，当前锁定: {inventory.locked_stock}, 需要扣减: {lock_num}")
+            if inventory.total_stock < lock_num:
+                return _fail(f"总库存不足，当前总库存: {inventory.total_stock}, 需要扣减: {lock_num}")
 
-        log = InventoryLog(
+            before_total = inventory.total_stock
+            before_available = inventory.available_stock
+            before_locked = inventory.locked_stock
+            old_version = inventory.version
+
+            # 原子更新
+            success = _update_inventory_with_optimistic_lock(
+                session, sku_id, old_version,
+                total_delta=-lock_num,
+                locked_delta=-lock_num,
+                available_delta=0
+            )
+            if not success:
+                raise BusinessException(f"库存版本冲突，SKU={sku_id}，请重试")
+
+            # 记录操作日志（现在在 business_logic 内部，可以访问 session）
+            log = InventoryLog(
+                sku_id=sku_id,
+                order_id=order_id,
+                biz_id=biz_id,
+                change_type=ChangeType.DEDUCT,
+                change_amount=lock_num,
+                before_total=before_total,
+                before_available=before_available,
+                before_locked=before_locked
+            )
+            session.add(log)
+
+            # 发送补偿消息
+            mq_msg = {
+                "trace_id": trace_id,
+                "order_id": order_id,
+                "sku_id": sku_id,
+                "deduct_num": lock_num,
+                "create_time": int(time.time()),
+                "retry_times": 0
+            }
+            save_message_with_retry_config(session, MQ_CONFIG["pay_callback_fail_topic"], mq_msg, biz_id, max_retry=3)
+
+            ctx_logger.info(f"扣减总库存成功: SKU={sku_id}, 订单={order_id}, 数量={lock_num}")
+            return _ok(f"扣减总库存{lock_num}件成功")  # ✅ 在 business_logic 内部返回结果
+
+        # 调用 execute_with_lock 并返回结果
+        return execute_with_lock(
             sku_id=sku_id,
-            order_id=order_id,
             biz_id=biz_id,
-            change_type=ChangeType.DEDUCT,
-            change_amount=lock_num,
-            before_total=before_total,
-            before_available=before_available,
-            before_locked=before_locked
+            lock_timeout=lock_timeout,
+            business_logic=business_logic,
+            ctx_logger=ctx_logger,
+            operation_type="deduct",
+            lock_num=lock_num
         )
-        session.add(log)
-
-        mq_msg = {
-            "trace_id": trace_id,
-            "order_id": order_id,
-            "sku_id": sku_id,
-            "deduct_num": lock_num,
-            "create_time": int(time.time()),
-            "retry_times": 0
-        }
-        save_message_with_retry_config(session, MQ_CONFIG["pay_callback_fail_topic"], mq_msg, biz_id, max_retry=3)
-
-        ctx_logger.info(f"扣减总库存成功: SKU={sku_id}, 订单={order_id}, 数量={lock_num}")
-        return _ok(f"扣减总库存{lock_num}件成功")
-
-    return execute_with_lock(
-        sku_id=sku_id,
-        biz_id=biz_id,
-        lock_timeout=lock_timeout,
-        business_logic=business_logic,
-        ctx_logger=ctx_logger,
-        operation_type="deduct",
-        lock_num=lock_num
-    )
 
 def query_inventory(sku_id: str = None) -> Dict:
     trace_id = get_trace_id()

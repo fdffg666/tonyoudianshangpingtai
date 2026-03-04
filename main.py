@@ -13,6 +13,11 @@ from utils.logger import get_trace_id, ContextLogger
 from utils.config import DATABASE_URL, REDIS_CONFIG, CURRENT_ISOLATION_LEVEL
 # 配置基础日志
 import logging
+from models.user import User, VerificationCode
+from services.inventory_service import engine
+
+User.metadata.create_all(bind=engine)
+VerificationCode.metadata.create_all(bind=engine)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,7 +96,7 @@ if __name__ == "__main__":
         print(f"\n❌ 系统异常：{e.message}")
     except Exception as e:
         # 未知异常：兜底处理
-        ctx_logger.error(f"测试流程遇到未知异常: {str(e)}", extra_context={"error_type": type(e).__name__})
+        ctx_logger.error(f"测试流程遇到未知异常: {str(e)}", exc_info=True)
         print(f"\n❌ 未知异常：系统繁忙，请稍后重试")
         print("✅ 常见原因：")
         print("  1. Redis未启动（cmd运行：redis-server --port 6380）")
@@ -103,3 +108,31 @@ if __name__ == "__main__":
     finally:
         # 无论是否异常都执行
         print(f"\n=== 测试流程结束 [trace_id={global_trace_id}] ===")
+        # ========== 新增：认证服务测试 ==========
+        from services.auth_service import (
+            send_verification_code,
+            verify_code_and_login,
+            register_by_password,
+            login_by_password
+        )
+
+        print("\n" + "=" * 50)
+        print("开始测试用户认证服务")
+        print("=" * 50)
+
+        # 测试账号密码注册
+        reg_res = register_by_password("13800138000", "123456", "测试用户")
+        print("1. 账号密码注册：", reg_res)
+
+        # 测试账号密码登录
+        login_res = login_by_password("13800138000", "123456")
+        print("2. 账号密码登录：", login_res)
+
+        # 测试发送验证码（需要真实手机号）
+        # sms_res = send_verification_code("你的手机号", "login")
+        # print("3. 发送验证码：", sms_res)
+
+        # 测试验证码登录（需手动输入收到的验证码）
+        # code = input("请输入收到的验证码：")
+        # sms_login_res = verify_code_and_login("你的手机号", code, "login")
+        # print("4. 验证码登录：", sms_login_res)

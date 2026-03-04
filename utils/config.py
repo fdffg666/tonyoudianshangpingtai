@@ -25,7 +25,6 @@ DB_CONFIG = {
     "password": os.getenv("MYSQL_PASSWORD"),
     "database": os.getenv("MYSQL_DB", "inventory_db"),
 }
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}?charset=utf8mb4"
 # Redis 完整配置（便于其他模块直接导入）
 REDIS_CONFIG = {
     "host": os.getenv("REDIS_HOST", "localhost"),
@@ -61,3 +60,10 @@ MQ_CONFIG = {
     "retry_max_times": 3,  # 补偿重试最大次数
     "order_timeout_seconds": 1800  # 订单超时时间（30分钟）
 }
+# ===================== 阿里云号码认证配置 =====================
+ALIYUN_ACCESS_KEY_ID = os.getenv("ALIYUN_ACCESS_KEY_ID", "")
+ALIYUN_ACCESS_KEY_SECRET = os.getenv("ALIYUN_ACCESS_KEY_SECRET", "")
+
+# JWT配置（用于生成登录令牌）
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", 24))  # 令牌有效期
