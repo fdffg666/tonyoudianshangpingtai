@@ -20,7 +20,7 @@ if PROJECT_ROOT not in sys.path:
 from sqlalchemy import create_engine, select, func, case, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-
+from models.base import Base
 # Redis 依赖检查
 try:
     from redis.exceptions import RedisError
@@ -879,3 +879,4 @@ if __name__ == "__main__":
             except Exception as e:
                 logger.error("消息补偿任务执行异常", exc_info=True)
             time.sleep(10)
+__all__ = ['Base', 'get_db_session', ...]  # 可选，但确保 Base 可导入

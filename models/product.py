@@ -1,9 +1,7 @@
 # models/product.py
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Index
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Index
 from datetime import datetime
-from services.inventory_service import Base
+from models.base import Base
 
 
 class Product(Base):

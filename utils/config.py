@@ -67,3 +67,13 @@ ALIYUN_ACCESS_KEY_SECRET = os.getenv("ALIYUN_ACCESS_KEY_SECRET", "")
 # JWT配置（用于生成登录令牌）
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", 24))  # 令牌有效期
+# ===================== 微信支付配置 =====================
+# TODO: 以下配置需要根据实际微信支付商户平台信息填写
+WECHATPAY_MCHID = os.getenv("WECHATPAY_MCHID", "")  # 商户号
+WECHATPAY_APPID = os.getenv("WECHATPAY_APPID", "")  # 应用ID（公众号/小程序/APP）
+WECHATPAY_APIV3_KEY = os.getenv("WECHATPAY_APIV3_KEY", "")  # APIv3密钥（32位）
+WECHATPAY_CERT_SERIAL_NO = os.getenv("WECHATPAY_CERT_SERIAL_NO", "")  # 商户证书序列号
+WECHATPAY_PRIVATE_KEY_PATH = os.getenv("WECHATPAY_PRIVATE_KEY_PATH", "./certs/apiclient_key.pem")  # 商户私钥文件路径
+WECHATPAY_NOTIFY_URL = os.getenv("WECHATPAY_NOTIFY_URL", "https://yourdomain.com/api/payments/notify")  # # TODO: 回调通知URL（需公网可访问）
+WECHATPAY_CERT_DIR = os.getenv("WECHATPAY_CERT_DIR", "./certs")  # 平台证书缓存目录
+WECHATPAY_PARTNER_MODE = os.getenv("WECHATPAY_PARTNER_MODE", "false").lower() == "true"  # 是否为服务商模式

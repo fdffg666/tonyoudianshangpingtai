@@ -57,7 +57,10 @@ async def list_merchants(admin: User = Depends(require_root)):
         merchants = session.execute(
             select(User).where(User.role == 'merchant')
         ).scalars().all()
-        return _ok(data=[
+        for m in merchants:
+            print("ORM mapped columns:", m.__table__.columns.keys())
+            break
+    return _ok(data=[
             {
                 "id": m.id,
                 "phone": m.phone_number,

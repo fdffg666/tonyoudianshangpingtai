@@ -10,14 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
-
+from models import user, product, cart, inventory, message
 from api import auth_routes, inventory_routes, product_routes, admin_routes
 from services.inventory_service import start_all_compensate_services
 from utils.logger import ContextLogger
-from models import product
 from services.inventory_service import engine
-from models import user, inventory, message, product
 from api import admin_routes
+from api import cart_routes,order_routes
 logger = ContextLogger(__name__)
 
 
@@ -55,6 +54,8 @@ app.include_router(auth_routes.router)
 app.include_router(inventory_routes.router)
 app.include_router(product_routes.router)
 app.include_router(admin_routes.router)
+app.include_router(cart_routes.router)
+app.include_router(order_routes.router)
 
 
 @app.get("/")
