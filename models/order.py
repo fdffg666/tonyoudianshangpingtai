@@ -13,6 +13,7 @@ class OrderStatus(str, enum.Enum):
     SHIPPED = "shipped"      # 已发货
     COMPLETED = "completed"  # 已完成
     CANCELLED = "cancelled"  # 已取消
+    PAID = "paid"  # 已付款（客服确认后）
 
 
 class Order(Base):

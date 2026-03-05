@@ -10,7 +10,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
 from services.inventory_service import get_db_session, _ok, _fail
+from utils.config import CUSTOMER_WECHAT_ID
 from utils.logger import ContextLogger, get_trace_id
+from services.notification import notify_order_paid
 
 logger = ContextLogger(__name__)
 
@@ -117,6 +119,7 @@ def create_order(
                 "order_no": order.order_no,
                 "total_amount": float(total_amount),
                 "status": order.status,
+                "customer_wechat": CUSTOMER_WECHAT_ID,
                 "items": [
                     {
                         "product_id": oi["product_id"],
@@ -282,3 +285,24 @@ def update_order_status(order_id: int, new_status: str, operator_id: int) -> Dic
     except SQLAlchemyError as e:
         ctx_logger.error(f"更新订单状态失败: {e}", exc_info=True)
         return _fail("数据库错误")
+
+def confirm_order_payment(order_id: int, operator_id: int) -> Dict:
+        """客服确认订单已付款，将状态从 PENDING 改为 CONFIRMED"""
+        trace_id = get_trace_id()
+        ctx_logger = logger.with_context(trace_id=trace_id, order_id=order_id, operator_id=operator_id)
+
+        try:
+            with get_db_session() as session:
+                order = session.get(Order, order_id)
+                if not order:
+                    return _fail("订单不存在")
+                if order.status != OrderStatus.PENDING.value:
+                    return _fail(f"订单当前状态为 {order.status}，不能确认付款")
+                order.status = OrderStatus.CONFIRMED.value
+                session.commit()
+                ctx_logger.info(f"订单已标记为已付款: order_id={order_id}")
+                notify_order_paid(order)
+                return _ok("订单已确认付款", {"order_id": order.id, "status": order.status})
+        except SQLAlchemyError as e:
+            ctx_logger.error(f"确认订单付款失败: {e}", exc_info=True)
+            return _fail("数据库错误")

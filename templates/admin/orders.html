@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>客服后台 - 待确认订单</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .btn { padding: 5px 10px; background: #4CAF50; color: white; border: none; cursor: pointer; }
+        .btn:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <h1>待确认订单（PENDING）</h1>
+    <table>
+        <tr>
+            <th>订单号</th>
+            <th>用户ID</th>
+            <th>总金额</th>
+            <th>备注</th>
+            <th>下单时间</th>
+            <th>操作</th>
+        </tr>
+        {% for order in orders %}
+        <tr>
+            <td>{{ order.order_no }}</td>
+            <td>{{ order.user_id }}</td>
+            <td>¥{{ order.total_amount }}</td>
+            <td>{{ order.remark or '' }}</td>
+            <td>{{ order.created_at }}</td>
+            <td>
+                <form action="/admin/orders/{{ order.id }}/confirm" method="post">
+                    <button type="submit" class="btn">确认付款</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">暂无待确认订单</td></tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

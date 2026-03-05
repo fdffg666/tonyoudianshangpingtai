@@ -1,7 +1,8 @@
 # utils/config.py
 import os
+import redis
 from dotenv import load_dotenv
-
+from redis.connection import ConnectionPool
 # 加载 .env 文件（如果没有.env，用默认值）
 load_dotenv()
 
@@ -25,14 +26,38 @@ DB_CONFIG = {
     "password": os.getenv("MYSQL_PASSWORD"),
     "database": os.getenv("MYSQL_DB", "inventory_db"),
 }
-# Redis 完整配置（便于其他模块直接导入）
 REDIS_CONFIG = {
     "host": os.getenv("REDIS_HOST", "localhost"),
     "port": int(os.getenv("REDIS_PORT", 6379)),
     "db": int(os.getenv("REDIS_DB", 0)),
-    "decode_responses": True,  # 补充：自动解码为字符串（避免bytes类型）
-    "socket_timeout": 5,  # 补充：连接超时时间（秒）
+    "decode_responses": True,
+    "socket_timeout": 5,
+    "socket_connect_timeout": 5,
+    # 【核心新增】连接池最大连接数
+    # 建议设为：压测最大并发数 * 2，或者直接设为 100-200
+    "max_connections": int(os.getenv("REDIS_MAX_CONNECTIONS", 100)),
 }
+
+# ========== 2. 全局单例连接池（只初始化一次） ==========
+# 使用模块级变量实现单例，避免重复创建连接池
+_redis_pool = None
+_redis_client = None
+
+def get_redis_pool() -> ConnectionPool:
+    """懒加载获取连接池（内部使用）"""
+    global _redis_pool
+    if _redis_pool is None:
+        _redis_pool = ConnectionPool(**REDIS_CONFIG)
+    return _redis_pool
+
+# ========== 3. 全局导出的客户端（其他模块直接导入这个用） ==========
+def get_redis_client() -> redis.Redis:
+    """获取全局Redis客户端（推荐所有业务代码使用）"""
+    global _redis_client
+    if _redis_client is None:
+        pool = get_redis_pool()
+        _redis_client = redis.Redis(connection_pool=pool)
+    return _redis_client
 REDIS_LOCK_EX = int(os.getenv("REDIS_LOCK_EX", 10))  # Redis锁过期时间（秒）
 
 # MySQL 事务隔离级别配置（用于压测对比）
@@ -77,3 +102,12 @@ WECHATPAY_PRIVATE_KEY_PATH = os.getenv("WECHATPAY_PRIVATE_KEY_PATH", "./certs/ap
 WECHATPAY_NOTIFY_URL = os.getenv("WECHATPAY_NOTIFY_URL", "https://yourdomain.com/api/payments/notify")  # # TODO: 回调通知URL（需公网可访问）
 WECHATPAY_CERT_DIR = os.getenv("WECHATPAY_CERT_DIR", "./certs")  # 平台证书缓存目录
 WECHATPAY_PARTNER_MODE = os.getenv("WECHATPAY_PARTNER_MODE", "false").lower() == "true"  # 是否为服务商模式
+CUSTOMER_WECHAT_ID = os.getenv("CUSTOMER_WECHAT_ID", "")
+# ===================== 客服配置项 =====================
+WECHAT_WEBHOOK_KEY = os.getenv("WECHAT_WEBHOOK_KEY", "")
+MAIL_SERVER = os.getenv("MAIL_SERVER", "")
+MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
+MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
+MAIL_FROM = os.getenv("MAIL_FROM", "")
+MAIL_TO = os.getenv("MAIL_TO", "")

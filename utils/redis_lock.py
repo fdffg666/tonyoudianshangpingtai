@@ -3,22 +3,14 @@ import uuid
 import logging
 import threading
 import time
-from contextlib import contextmanager
 import redis
+from contextlib import contextmanager
+from utils.config import get_redis_client
 from redis.exceptions import RedisError
 from utils.config import REDIS_CONFIG, REDIS_LOCK_EX  # 改成 REDIS_CONFIG
+redis_client = get_redis_client()
 
 logger = logging.getLogger(__name__)
-
-# Redis 连接池（保留你的优点）
-redis_pool = redis.ConnectionPool(
-    host=REDIS_CONFIG["host"],
-    port=REDIS_CONFIG["port"],
-    db=REDIS_CONFIG["db"],
-    decode_responses=True,
-    max_connections=20
-)
-redis_client = redis.Redis(connection_pool=redis_pool)
 
 
 @contextmanager
@@ -26,7 +18,7 @@ def redis_lock(
         lock_key: str,
         timeout: int = REDIS_LOCK_EX,
         retry_times: int = 30,  # 新增：重试次数
-        retry_interval: float = 1,  # 新增：重试间隔（秒）
+        retry_interval: float = 0.1,  # 新增：重试间隔（秒）
         watch_dog: bool = True  # 新增：是否开启看门狗续期
 ):
     """

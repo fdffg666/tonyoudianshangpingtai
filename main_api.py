@@ -11,12 +11,10 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 from models import user, product, cart, inventory, message
-from api import auth_routes, inventory_routes, product_routes, admin_routes
-from services.inventory_service import start_all_compensate_services
+from services.inventory_service import start_all_compensate_services,engine
 from utils.logger import ContextLogger
-from services.inventory_service import engine
-from api import admin_routes
-from api import cart_routes,order_routes
+from api import cart_routes,order_routes,inventory_routes, product_routes, admin_routes, payment_routes,auth_routes
+from utils.config import CURRENT_ISOLATION_LEVEL
 logger = ContextLogger(__name__)
 
 
@@ -30,7 +28,7 @@ async def lifespan(app: FastAPI):
     yield
     # 关闭时的代码（如果需要）
     logger.info("应用关闭，清理资源...")
-
+print(f"🚀 启动 FastAPI 应用，数据库隔离级别：{CURRENT_ISOLATION_LEVEL}")
 
 # 创建 FastAPI 应用（唯一实例）
 app = FastAPI(
@@ -57,7 +55,7 @@ app.include_router(admin_routes.router)
 app.include_router(cart_routes.router)
 app.include_router(order_routes.router)
 
-
+#app.include_router(payment_routes.router)
 @app.get("/")
 async def root():
     return {"message": "库存管理系统 API 已启动", "docs": "/docs"}
