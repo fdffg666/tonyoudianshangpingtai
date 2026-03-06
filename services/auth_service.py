@@ -13,7 +13,7 @@ from models.user import User, VerificationCode
 from services.inventory_service import get_db_session, _ok, _fail
 from utils.config import (
     ALIYUN_ACCESS_KEY_ID, ALIYUN_ACCESS_KEY_SECRET,
-    JWT_SECRET, JWT_EXPIRE_HOURS
+    JWT_SECRET, JWT_EXPIRE_HOURS,  get_redis_client
 )
 from utils.logger import ContextLogger, get_trace_id
 from utils.exceptions import BusinessException
@@ -25,9 +25,6 @@ from alibabacloud_dypnsapi20170525 import models as dypnsapi_models
 from alibabacloud_tea_util import models as util_models
 
 logger = ContextLogger(__name__)
-
-# 验证码缓存（生产环境请使用 Redis）
-verify_code_cache = {}
 
 
 def _generate_jwt_token(user_id: int, phone_number: str) -> str:
@@ -57,6 +54,7 @@ def register_by_password(phone_number: str, password: str, nickname: str = None)
 
     if not phone_number or not password:
         return _fail("手机号和密码不能为空")
+
 
     try:
         with get_db_session() as session:
@@ -195,13 +193,16 @@ def send_sms_verify_code(phone_number: str, scene: str = "login") -> Dict:
 
     if not phone_number or not phone_number.isdigit() or len(phone_number) != 11:
         return _fail("手机号格式错误")
+    redis_client = get_redis_client()
 
     cache_key = f"{phone_number}:{scene}"
-    if cache_key in verify_code_cache:
-        cache_info = verify_code_cache[cache_key]
-        if datetime.now() < cache_info["next_send_time"]:
-            remain = (cache_info["next_send_time"] - datetime.now()).seconds
-            return _fail(f"请{remain}秒后再试")
+    cache_key = f"sms_code:{scene}:{phone_number}"
+    block_key = f"{cache_key}:block"
+
+    # 检查冷却时间（60秒内不能重复发送）
+    if redis_client.exists(block_key):
+        ttl = redis_client.ttl(block_key)
+        return _fail(f"请{ttl}秒后再试")
 
     code = generate_verify_code()
 
@@ -220,12 +221,12 @@ def send_sms_verify_code(phone_number: str, scene: str = "login") -> Dict:
         response = client.send_sms_verify_code_with_options(request, runtime)
 
         if response.body.code == "OK":
-            verify_code_cache[cache_key] = {
-                "code": code,
-                "expires_at": datetime.now() + timedelta(minutes=5),
-                "next_send_time": datetime.now() + timedelta(seconds=60),
-            }
-            ctx_logger.info(f"验证码发送成功: {code}")
+            # 存储验证码，5分钟过期
+            redis_client.setex(cache_key, 300, code)
+            # 设置冷却标记，60秒过期
+            redis_client.setex(block_key, 60, "1")
+            ctx_logger.info(f"验证码已写入 Redis: {cache_key}")
+            ctx_logger.info(f"验证码发送成功，手机号: {phone_number}")
             return _ok("验证码发送成功")
         else:
             ctx_logger.error(f"发送失败: {response.body.message}")
@@ -239,21 +240,18 @@ def verify_code_and_login(phone_number: str, code: str, scene: str = "login", ip
     trace_id = get_trace_id()
     ctx_logger = logger.with_context(trace_id=trace_id, phone=phone_number)
 
-    cache_key = f"{phone_number}:{scene}"
-    cache_info = verify_code_cache.get(cache_key)
-    ctx_logger.info(f"验证码缓存: {cache_info}")  # 新增日志
-    if not cache_info:
-        ctx_logger.warning(f"缓存中无该手机号验证码: {cache_key}")
+    redis_client = get_redis_client()
+    cache_key = f"sms_code:{scene}:{phone_number}"
+    stored_code = redis_client.get(cache_key)  # 新增日志
+    if not stored_code:
+        ctx_logger.warning("验证码不存在或已过期")
         return _fail("验证码未发送或已过期")
-    if datetime.now() > cache_info["expires_at"]:
-        ctx_logger.warning(f"验证码已过期, 过期时间: {cache_info['expires_at']}")
-        del verify_code_cache[cache_key]
-        return _fail("验证码已过期")
-    if cache_info["code"] != code:
-        ctx_logger.warning(f"验证码错误, 输入: {code}, 正确: {cache_info['code']}")
+
+    if stored_code != code:
+        ctx_logger.warning(f"验证码错误，输入: {code}")
         return _fail("验证码错误")
 
-    del verify_code_cache[cache_key]
+    redis_client.delete(cache_key)
 
     try:
         with get_db_session() as session:
@@ -261,7 +259,7 @@ def verify_code_and_login(phone_number: str, code: str, scene: str = "login", ip
                 select(User).where(User.phone_number == phone_number)
             ).scalar_one_or_none()
             if not user:
-                user = User(phone_number=phone_number, nickname=f"用户{phone_number[-4:]}",role='user')
+                user = User(phone_number=phone_number, nickname=f"用户{phone_number[-4:]}")
                 session.add(user)
                 session.flush()
                 ctx_logger.info(f"新用户自动注册: id={user.id}")
@@ -271,16 +269,12 @@ def verify_code_and_login(phone_number: str, code: str, scene: str = "login", ip
             session.commit()
 
             token = _generate_jwt_token(user.id, user.phone_number)
-            return _ok(
-                "登录成功",
-                {
-                    "user_id": user.id,
-                    "phone": user.phone_number,
-                    "nickname": user.nickname,
-                    #"is_new": user.created_at > datetime.now() - timedelta(seconds=5),
-                    "token": token,
-                },
-            )
+            return _ok("登录成功", {
+                "user_id": user.id,
+                "phone": user.phone_number,
+                "nickname": user.nickname,
+                "token": token,
+            })
     except Exception as e:
         ctx_logger.error(f"登录失败: {e}", exc_info=True)
         return _fail("登录失败，请稍后重试")

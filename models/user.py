@@ -4,7 +4,7 @@ from datetime import datetime
 import hashlib
 import os
 from models.base import Base
-
+from passlib.context import CryptContext
 
 class User(Base):
     """用户表"""
@@ -26,22 +26,17 @@ class User(Base):
     __table_args__ = (
         Index("idx_phone_status", "phone_number", "status"),
     )
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     def set_password(self, password: str):
-        """设置密码（加盐哈希）"""
-        self.salt = os.urandom(16).hex()
-        self.password_hash = hashlib.sha256(
-            (password + self.salt).encode()
-        ).hexdigest()
+        """设置密码（使用 bcrypt 哈希）"""
+        self.password_hash = self.pwd_context.hash(password)
 
     def check_password(self, password: str) -> bool:
         """验证密码"""
-        if not self.password_hash or not self.salt:
+        if not self.password_hash:
             return False
-        calc_hash = hashlib.sha256(
-            (password + self.salt).encode()
-        ).hexdigest()
-        return calc_hash == self.password_hash
+        return self.pwd_context.verify(password, self.password_hash)
 
 
 class VerificationCode(Base):

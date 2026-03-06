@@ -836,7 +836,7 @@ def aggregate_inventory_logs(session=None) -> Dict:
         results = query.all()
         agg_dict = {}
         for row in results:
-            total_stock = row.init_total + row.reset_total - row.deduct_total
+            total_stock = row.init_total - row.deduct_total
             locked_stock = (row.lock_total - row.release_total) - row.deduct_total
             agg_dict[row.sku_id] = {"total": total_stock, "locked": locked_stock}
 
@@ -907,9 +907,9 @@ def reconcile_inventory():
 # ========== 10. 启动所有补偿服务 ==========
 def start_all_compensate_services():
     """启动所有补偿和对账服务"""
-    # 如果需要，可以在这里启动其他补偿线程
-    # compensate_order_timeout()
-    # compensate_pay_callback_fail()
+    #如果需要，可以在这里启动其他补偿线程
+    #compensate_order_timeout()
+    #compensate_pay_callback_fail()
     reconcile_inventory()
     logger.info("所有补偿和对账服务已启动")
 

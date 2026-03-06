@@ -9,7 +9,9 @@ load_dotenv()
 # ===================== 基础配置 =====================
 # MySQL 配置
 MYSQL_USER = os.getenv("MYSQL_USER", "root")  # 补充：MySQL用户名（默认root）
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "123456")  # 替换为你的默认密码
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+if not MYSQL_PASSWORD:
+    raise ValueError("环境变量 MYSQL_PASSWORD 未设置！")
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")  # 补充：MySQL主机
 MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")  # 补充：MySQL端口
 MYSQL_DB = os.getenv("MYSQL_DB", "inventory_db")  # 补充：数据库名
@@ -90,7 +92,9 @@ ALIYUN_ACCESS_KEY_ID = os.getenv("ALIYUN_ACCESS_KEY_ID", "")
 ALIYUN_ACCESS_KEY_SECRET = os.getenv("ALIYUN_ACCESS_KEY_SECRET", "")
 
 # JWT配置（用于生成登录令牌）
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("环境变量 JWT_SECRET 未设置！")
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", 24))  # 令牌有效期
 # ===================== 微信支付配置 =====================
 # TODO: 以下配置需要根据实际微信支付商户平台信息填写

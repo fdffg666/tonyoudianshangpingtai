@@ -1,7 +1,7 @@
 # api/payment_routes.py
 from fastapi import APIRouter, HTTPException, Depends, Request, Header
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional,Tuple, Dict
 
 from services.payment_service import (
     create_native_payment,
@@ -41,6 +41,20 @@ async def api_create_native_payment(
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
+def handle_payment_notify(headers: dict, body: bytes) -> Tuple[bool, str, Optional[Dict]]:
+    client = get_wechatpay_client()
+    if not client:
+        return False, 'FAIL', None
+    try:
+        # 关键：client.callback 会验证签名并解密
+        result = client.callback(headers, body)
+        if not result:
+            return False, 'FAIL', None
+        # ... 处理支付成功逻辑 ...
+        return True, 'SUCCESS', result
+    except Exception as e:
+        logger.error(f"回调处理异常: {e}")
+        return False, 'FAIL', None
 
 @router.post("/notify")
 async def api_payment_notify(

@@ -12,6 +12,7 @@ from services.inventory_service import (
     query_inventory_log
 )
 from api.auth_routes import get_current_user, require_merchant  # 导入需要的依赖
+from services.order_service import get_order_detail
 
 router = APIRouter(prefix="/inventory", tags=["库存管理"])
 
@@ -57,7 +58,13 @@ async def api_init_stock(req: InitStockRequest, user=Depends(require_merchant)):
 # 锁定库存：普通用户可调用（下单时使用）
 @router.post("/lock", response_model=InventoryResponse)
 async def api_lock_stock(req: LockStockRequest, user=Depends(get_current_user)):
-    """锁定库存（普通用户下单时调用）"""
+    # 1. 先查询订单，确认订单属于当前用户
+    order = get_order_detail(req.order_id, user["user_id"])
+    if not order["success"]:
+        # get_order_detail 会在订单不存在或无权时返回错误信息
+        raise HTTPException(status_code=403, detail=order["message"])
+
+    # 2. 归属校验通过，继续锁定库存
     result = lock_stock(req.sku_id, req.lock_num, req.order_id, req.lock_timeout)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
