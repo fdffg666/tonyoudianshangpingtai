@@ -2,9 +2,11 @@
 import sys
 import os
 import uvicorn
+import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI,File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 # 确保项目根路径在 sys.path 中
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +20,9 @@ from utils.config import CURRENT_ISOLATION_LEVEL
 logger = ContextLogger(__name__)
 
 
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用启动和关闭时的生命周期事件"""
@@ -28,7 +33,7 @@ async def lifespan(app: FastAPI):
     yield
     # 关闭时的代码（如果需要）
     logger.info("应用关闭，清理资源...")
-print(f"🚀 启动 FastAPI 应用，数据库隔离级别：{CURRENT_ISOLATION_LEVEL}")
+    print(f"🚀 启动 FastAPI 应用，数据库隔离级别：{CURRENT_ISOLATION_LEVEL}")
 
 # 创建 FastAPI 应用（唯一实例）
 app = FastAPI(
@@ -37,6 +42,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan  # 使用新的生命周期管理器
 )
+
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 配置 CORS
 app.add_middleware(
@@ -59,6 +67,22 @@ app.include_router(order_routes.router)
 @app.get("/")
 async def root():
     return {"message": "库存管理系统 API 已启动", "docs": "/docs"}
+
+
+@app.post("/upload")
+async def upload_image(file: UploadFile = File(...)):
+    # 生成唯一文件名
+    ext = os.path.splitext(file.filename)[1]
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = f"static/{filename}"
+
+    # 保存文件
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+
+    # 返回可访问的 URL
+    url = f"/static/{filename}"
+    return {"success": True, "url": url}
 
 
 if __name__ == "__main__":

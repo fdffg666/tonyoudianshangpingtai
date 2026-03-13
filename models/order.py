@@ -27,6 +27,7 @@ class Order(Base):
     status = Column(String(20), nullable=False, default=OrderStatus.PENDING.value)
     expected_delivery_date = Column(Date, nullable=True)
     remark = Column(String(500), nullable=True)
+    assigned_wechat = Column(String(50), nullable=True, comment="分配的商家微信号")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

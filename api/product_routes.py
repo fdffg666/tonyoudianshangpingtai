@@ -64,7 +64,7 @@ async def api_create_product(
 @router.get("/{product_id}")
 async def api_get_product(
     product_id: int,
-    user=Depends(require_merchant)
+    user=Depends(get_current_user)
 ):
     """获取商品详情"""
     result = get_product(product_id)
@@ -80,7 +80,7 @@ async def api_list_products(
     category: Optional[str] = None,
     status: Optional[int] = Query(None, ge=0, le=1),
     keyword: Optional[str] = None,
-    user=Depends(require_merchant)
+    user=Depends(get_current_user)
 ):
     """分页查询商品列表"""
     result = list_products(

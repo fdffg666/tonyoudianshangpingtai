@@ -7,11 +7,28 @@ from sqlalchemy import select, update
 from services.order_service import confirm_order_payment
 from models.user import User
 from services.inventory_service import get_db_session, _ok, _fail
-from api.auth_routes import require_root, get_current_user_obj,require_merchant
+from api.auth_routes import require_root, get_current_user_obj,require_merchant, require_admin
 from services.auth_service import _generate_jwt_token, verify_token
 
-router = APIRouter(prefix="/admin", tags=["管理员管理"])
+router = APIRouter(prefix="/admin", tags=["管理员管理"], dependencies=[Depends(require_admin)])
 templates = Jinja2Templates(directory="templates")
+
+import secrets
+import time
+
+invite_codes = {}  # 内存存储 {code: expire_timestamp}
+
+@router.post("/invite-code")
+async def generate_invite_code(user=Depends(require_root)):
+    # 清理过期邀请码
+    now = time.time()
+    expired = [k for k, v in invite_codes.items() if now > v]
+    for k in expired:
+        del invite_codes[k]
+    # 生成新邀请码
+    code = secrets.token_hex(3).upper()  # 6 characters
+    invite_codes[code] = now + 300
+    return {"success": True, "code": code, "expire_in": "5分钟"}
 
 
 # ---------- 请求模型 ----------

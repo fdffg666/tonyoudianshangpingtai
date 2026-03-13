@@ -82,6 +82,7 @@ def register_by_password(phone_number: str, password: str, nickname: str = None)
                     "phone": user.phone_number,
                     "nickname": user.nickname,
                     "token": token,
+                "role": user.role,
                 },
             )
     except Exception as e:
@@ -118,6 +119,7 @@ def login_by_password(login_name: str, password: str, ip: str = None) -> Dict:
                     "phone": user.phone_number,
                     "nickname": user.nickname,
                     "token": token,
+                "role": user.role,
                 },
             )
     except Exception as e:
@@ -274,10 +276,60 @@ def verify_code_and_login(phone_number: str, code: str, scene: str = "login", ip
                 "phone": user.phone_number,
                 "nickname": user.nickname,
                 "token": token,
+            "role": user.role,
             })
     except Exception as e:
         ctx_logger.error(f"登录失败: {e}", exc_info=True)
         return _fail("登录失败，请稍后重试")
+
+def set_user_password(user_id: int, new_password: str) -> Dict:
+    trace_id = get_trace_id()
+    ctx_logger = logger.with_context(trace_id=trace_id, user_id=user_id)
+
+    if not new_password or len(new_password) < 6:
+        return _fail("密码长度至少6位")
+
+    try:
+        with get_db_session() as session:
+            user = session.execute(
+                select(User).where(User.id == user_id)
+            ).scalar_one_or_none()
+            if not user:
+                return _fail("用户不存在")
+
+            user.set_password(new_password)
+            session.commit()
+            ctx_logger.info(f"用户密码设置成功: user_id={user_id}")
+            return _ok("密码设置成功")
+    except Exception as e:
+        ctx_logger.error(f"设置密码失败: {e}", exc_info=True)
+        return _fail("系统异常，请稍后重试")
+
+def change_user_password(user_id: int, old_password: str, new_password: str) -> Dict:
+    trace_id = get_trace_id()
+    ctx_logger = logger.with_context(trace_id=trace_id, user_id=user_id)
+
+    if not new_password or len(new_password) < 6:
+        return _fail("新密码长度至少6位")
+
+    try:
+        with get_db_session() as session:
+            user = session.execute(
+                select(User).where(User.id == user_id)
+            ).scalar_one_or_none()
+            if not user:
+                return _fail("用户不存在")
+
+            if not user.check_password(old_password):
+                return _fail("旧密码错误")
+
+            user.set_password(new_password)
+            session.commit()
+            ctx_logger.info(f"用户密码修改成功: user_id={user_id}")
+            return _ok("密码修改成功")
+    except Exception as e:
+        ctx_logger.error(f"修改密码失败: {e}", exc_info=True)
+        return _fail("系统异常，请稍后重试")
 
 def verify_token(token: str) -> Optional[Dict]:
     try:

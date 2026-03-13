@@ -4,7 +4,8 @@ import string
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Dict, Optional
-from sqlalchemy import select,func
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlalchemy.exc import SQLAlchemyError
 
 from models.order import Order, OrderItem, OrderStatus
@@ -51,7 +52,7 @@ def create_order(
         with get_db_session() as session:
             product_ids = [item["product_id"] for item in items]
             products = session.execute(
-                select(Product).where(Product.id.in_(product_ids), Product.status == 1)
+                sa_select(Product).where(Product.id.in_(product_ids), Product.status == 1)
             ).scalars().all()
 
             if len(products) != len(product_ids):
@@ -96,8 +97,21 @@ def create_order(
                 remark=remark,
                 status=OrderStatus.PENDING
             )
+            order.status = OrderStatus.PENDING
             session.add(order)
             session.flush()  # 获取 order.id
+
+            # -------------- 商家的微信号分配 --------------
+            from models.user import User
+            FALLBACK_WECHAT = "12321312"
+
+            merchants = session.scalars(sa_select(User).where(User.role == "merchant", User.wechat_id != None)).all()
+            if merchants:
+                assigned = merchants[order.id % len(merchants)]
+                order.assigned_wechat = assigned.wechat_id
+            else:
+                order.assigned_wechat = FALLBACK_WECHAT  # 没有商家时用备用微信号
+            session.flush()  # 更新数据库中的assigned_wechat
 
             # 6. 添加订单明细
             for oi in order_items:
@@ -115,10 +129,12 @@ def create_order(
 
             # 7. 返回订单信息
             return _ok("订单创建成功", {
+                "id": order.id,
                 "order_id": order.id,
                 "order_no": order.order_no,
                 "total_amount": float(total_amount),
                 "status": order.status,
+                "assigned_wechat": order.assigned_wechat,
                 "customer_wechat": CUSTOMER_WECHAT_ID,
                 "items": [
                     {
@@ -142,10 +158,11 @@ def create_order(
     except Exception as e:
         ctx_logger.error(f"创建订单未知异常: {e}", exc_info=True)
         return _fail("系统异常，请稍后重试")
-from sqlalchemy import func, select
+from sqlalchemy import func
 # 查询订单列表（分页、状态筛选）
 def list_orders(
     user_id: Optional[int] = None,
+    assigned_wechat: Optional[str] = None,
     status: Optional[str] = None,
     page: int = 1,
     page_size: int = 20
@@ -160,9 +177,11 @@ def list_orders(
 
     try:
         with get_db_session() as session:
-            stmt = select(Order)
+            stmt = sa_select(Order)
             if user_id is not None:
                 stmt = stmt.where(Order.user_id == user_id)
+            if assigned_wechat is not None:
+                stmt = stmt.where(Order.assigned_wechat == assigned_wechat)
             if status:
                 # 校验状态合法性
                 try:
@@ -171,7 +190,7 @@ def list_orders(
                     return _fail(f"无效的订单状态: {status}")
                 stmt = stmt.where(Order.status == status)
 
-            total = session.execute(select(func.count()).select_from(stmt.subquery())).scalar()
+            total = session.execute(sa_select(func.count()).select_from(stmt.subquery())).scalar()
             orders = session.execute(
                 stmt.order_by(Order.created_at.desc())
                 .offset((page-1)*page_size)

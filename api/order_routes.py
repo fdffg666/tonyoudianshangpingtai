@@ -74,8 +74,13 @@ async def api_list_orders(
     page_size: int = Query(20, ge=1, le=100),
     user: dict = Depends(get_current_user)
 ):
-    # 暂只返回当前用户的订单，后续可根据角色扩展
-    result = list_orders(user_id=user["user_id"], status=status, page=page, page_size=page_size)
+    if user.get("role") == "merchant":
+        result = list_orders(user_id=None, assigned_wechat=user.get("wechat_id"), status=status, page=page, page_size=page_size)
+    elif user.get("role") == "admin" or user.get("role") == "root":
+        result = list_orders(user_id=None, status=status, page=page, page_size=page_size)
+    else:
+        result = list_orders(user_id=user["user_id"], status=status, page=page, page_size=page_size)
+        
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return result
@@ -105,6 +110,16 @@ async def api_update_order_status(
     req: UpdateOrderStatusRequest,
     admin: User = Depends(require_merchant)  # 需要导入 require_merchant
 ):
+    from services.inventory_service import get_db_session
+    from models.order import Order
+    with get_db_session() as session:
+        order = session.get(Order, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="订单不存在")
+        if admin.role == "merchant":
+            if order.assigned_wechat != admin.wechat_id:
+                raise HTTPException(status_code=403, detail="无权操作此订单")
+
     result = update_order_status(order_id, req.status, admin.id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])

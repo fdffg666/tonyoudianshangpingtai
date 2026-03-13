@@ -22,6 +22,7 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     created_at = Column(DateTime, default=datetime.now)
     role = Column(String(20), default='user', nullable=False, comment='角色: root/merchant/user')
+    wechat_id = Column(String(50), nullable=True, comment="商家微信号（订单收款用）")
 
     __table_args__ = (
         Index("idx_phone_status", "phone_number", "status"),
