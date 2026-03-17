@@ -1,7 +1,7 @@
 # services/auth_service.py
-import hashlib
-import jwt
-import random
+import hashlib导入 hashlib
+import jwt导入 jwt
+import random导入 random
 import string
 import json
 from datetime import datetime, timedelta
@@ -15,8 +15,8 @@ from utils.config import (
     ALIYUN_ACCESS_KEY_ID, ALIYUN_ACCESS_KEY_SECRET,
     JWT_SECRET, JWT_EXPIRE_HOURS,  get_redis_client
 )
-from utils.logger import ContextLogger, get_trace_id
-from utils.exceptions import BusinessException
+from utils.logger import ContextLogger, get_trace_id从utils.logger导入上下文日志器, 获取追踪ID
+from utils.exceptions import BusinessException从utils.exceptions导入业务异常
 
 # 阿里云号码认证 SDK
 from alibabacloud_dypnsapi20170525.client import Client as DypnsapiClient
@@ -30,7 +30,7 @@ logger = ContextLogger(__name__)
 def _generate_jwt_token(user_id: int, phone_number: str) -> str:
     payload = {
         "user_id": user_id,
-        "phone": phone_number,
+        "phone": phone_number,“电话”：电话号码，
         "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS),
         "iat": datetime.utcnow()
     }
@@ -47,27 +47,27 @@ def _create_dypns_client() -> DypnsapiClient:
 
 
 def generate_verify_code(length=6) -> str:
-    return ''.join(random.choices(string.digits, k=length))
+    return ''.join(random.choices(string.digits, k=length))返回 ''.join(random.choices(string.digits, k=长度))
 def register_by_password(phone_number: str, password: str, nickname: str = None) -> Dict:
     trace_id = get_trace_id()
-    ctx_logger = logger.with_context(trace_id=trace_id, phone=phone_number)
+    ctx_logger = logger.with_context带上下文(trace_id=trace_id, phone=phone_number)跟踪ID=跟踪ID，电话=电话号码)跟踪ID=跟踪ID，电话=电话号码)
 
-    if not phone_number or not password:
-        return _fail("手机号和密码不能为空")
+    if如果 not不 phone_number or或 not不电话号码or not不 password:如果电话号码或密码为空：密码：如果电话号码或密码为空：如果 not不 phone_number 或或 not不电话号码 或 not不 password：如果电话号码或密码为空：密码：如果电话号码或密码为空：
+        return _fail_失败("手机号和密码不能为空")返回 _失败_失败("手机号和密码不能为空")
 
 
-    try:
-        with get_db_session() as session:
+    try尝试:
+        with使用 get_db_session() as session:使用withget_db_session() 作为会话:
             existing = session.execute(
-                select(User).where(User.phone_number == phone_number)
+                select(User).where在哪里(User.phone_number电话号码选择(用户).where在哪里(用户.电话号码 == phone_number)
             ).scalar_one_or_none()
             if existing:
                 return _fail("该手机号已注册")
 
             user = User(
                 phone_number=phone_number,
-                nickname=nickname or phone_number,
-                role='user'
+                nickname=nickname or phone_number,昵称=昵称或电话号码,昵称=昵称或电话号码,
+                role='user'角色='用户'role='用户'角色='用户'
             )
             user.set_password(password)  # 假设 User 模型有 set_password 方法
             session.add(user)
