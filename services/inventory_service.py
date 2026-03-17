@@ -129,14 +129,11 @@ except ImportError:
 # ========== 4. 初始化 ==========
 logger = ContextLogger(__name__)
 
+# 使用SQLite数据库进行开发测试
+import os
+SQLITE_DB = "inventory.db"
 engine = create_engine(
-    DATABASE_URL,
-    isolation_level="READ COMMITTED",
-    pool_recycle=300,
-    future=True,
-    pool_pre_ping=False,
-    pool_size=50,
-    max_overflow=25,
+    f"sqlite:///{SQLITE_DB}",
     echo=False
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -535,13 +532,9 @@ def lock_stock(sku_id: str, lock_num: int, order_id: str, lock_timeout: int = 30
 
     # ========== Redis锁逻辑优化 ==========
     if ENABLE_REDIS_LOCK:
-        # 优化：缩小锁粒度（按SKU哈希分段，提升并发）
-        lock_segment = hash(sku_id) % 10  # 分成10段锁
-        lock_key = f"inventory_lock:{sku_id}:{lock_segment}"
-
         # 调用封装的Redis锁执行逻辑
         return execute_with_lock(
-            lock_key=lock_key,  # 修复：原代码传sku_id，应该传锁key
+            sku_id=sku_id,
             biz_id=biz_id,
             lock_timeout=lock_timeout,
             business_logic=business_logic,

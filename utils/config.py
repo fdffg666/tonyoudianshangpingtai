@@ -9,23 +9,27 @@ load_dotenv()
 # ===================== 基础配置 =====================
 # MySQL 配置
 MYSQL_USER = os.getenv("MYSQL_USER", "root")  # 补充：MySQL用户名（默认root）
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-if not MYSQL_PASSWORD:
-    raise ValueError("环境变量 MYSQL_PASSWORD 未设置！")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")  # 允许密码为空
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")  # 补充：MySQL主机
 MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")  # 补充：MySQL端口
 MYSQL_DB = os.getenv("MYSQL_DB", "inventory_db")  # 补充：数据库名
 # 拼接数据库连接字符串（规范化）
-DATABASE_URL = (
-    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
-    f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
-)
+if MYSQL_PASSWORD:
+    DATABASE_URL = (
+        f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
+        f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
+    )
+else:
+    DATABASE_URL = (
+        f"mysql+pymysql://{MYSQL_USER}"
+        f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
+    )
 # 核心配置（替换为你的MySQL用户名和密码）
 DB_CONFIG = {
     "host": os.getenv("MYSQL_HOST", "127.0.0.1"),
     "port": int(os.getenv("MYSQL_PORT", 3306)),
-    "user": os.getenv("MYSQL_USER"),
-    "password": os.getenv("MYSQL_PASSWORD"),
+    "user": os.getenv("MYSQL_USER", "root"),
+    "password": os.getenv("MYSQL_PASSWORD", ""),
     "database": os.getenv("MYSQL_DB", "inventory_db"),
 }
 REDIS_CONFIG = {

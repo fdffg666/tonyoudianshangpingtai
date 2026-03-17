@@ -62,8 +62,7 @@ app.include_router(product_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(cart_routes.router)
 app.include_router(order_routes.router)
-
-#app.include_router(payment_routes.router)
+app.include_router(payment_routes.router)
 @app.get("/")
 async def root():
     return {"message": "库存管理系统 API 已启动", "docs": "/docs"}
